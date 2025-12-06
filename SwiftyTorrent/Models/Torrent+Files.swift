@@ -18,18 +18,27 @@ extension Torrent {
     private static var dirsCache = [Data: Directory]()
     
     private var fileEntries: [FileEntry] {
-        if Torrent.filesCache[infoHash] == nil {
-            Torrent.filesCache[infoHash] = torrentManager.filesForTorrent(withHash: infoHash)
+        if let files = Torrent.filesCache[infoHash] {
+            return files
         }
-        return Torrent.filesCache[infoHash]!
+
+        let files = torrentManager.filesForTorrent(withHash: infoHash) ?? []
+        if !files.isEmpty {
+            Torrent.filesCache[infoHash] = files
+        }
+        return files
     }
 
     var directory: Directory {
-        if Torrent.dirsCache[infoHash] == nil {
-            let dir = Directory.directory(from: fileEntries)
-           Torrent.dirsCache[infoHash] = dir
+        if let dir = Torrent.dirsCache[infoHash] {
+            return dir
         }
-        return Torrent.dirsCache[infoHash]!
+
+        let dir = Directory.directory(from: fileEntries)
+        if !fileEntries.isEmpty {
+            Torrent.dirsCache[infoHash] = dir
+        }
+        return dir
     }
 
 }
