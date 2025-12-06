@@ -27,34 +27,40 @@ final class SearchViewModel: ObservableObject {
     
     init() {
         $searchText
-            .handleEvents(receiveOutput: { text in
+            .handleEvents(receiveOutput: { [weak self] text in
                 // Clear results if `searchText` is empty
                 if text.isEmpty {
-                    self.items = []
+                    self?.items = []
                 }
             })
             .filter { !$0.isEmpty }
             .debounce(for: .milliseconds(500), scheduler: RunLoop.main)
-            .handleEvents(receiveOutput: { _ in
-                self.isLoading = true
-                self.currentPage = 1
-                self.hasMorePages = true
+            .handleEvents(receiveOutput: { [weak self] _ in
+                self?.isLoading = true
+                self?.currentPage = 1
+                self?.hasMorePages = true
             })
-            .map {
-                self.imdbProvider.fetchSuggestions($0)
+            .map { [weak self] query -> AnyPublisher<String, Never> in
+                guard let self = self else { return Empty().eraseToAnyPublisher() }
+                return self.imdbProvider.fetchSuggestions(query)
                     .replaceError(with: "")
+                    .eraseToAnyPublisher()
             }
             .switchToLatest()
-            .map {
-                self.eztbProvider.fetchTorrents(imdbId: $0, page: 1)
+            .map { [weak self] imdbId -> AnyPublisher<[SearchDataItem], Never> in
+                guard let self = self else { return Empty().eraseToAnyPublisher() }
+                return self.eztbProvider.fetchTorrents(imdbId: imdbId, page: 1)
                     .replaceError(with: [])
+                    .eraseToAnyPublisher()
             }
             .switchToLatest()
             .receive(on: DispatchQueue.main)
-            .handleEvents(receiveOutput: { _ in
-                self.isLoading = false
+            .handleEvents(receiveOutput: { [weak self] _ in
+                self?.isLoading = false
             })
-            .assign(to: \.items, on: self)
+            .sink(receiveValue: { [weak self] items in
+                self?.items = items
+            })
             .store(in: &cancellables)
     }
     
@@ -77,21 +83,24 @@ final class SearchViewModel: ObservableObject {
         isLoading = true
         
         imdbProvider.fetchSuggestions(searchText)
-            .map {
-                self.eztbProvider.fetchTorrents(imdbId: $0, page: self.currentPage + 1)
+            .map { [weak self] imdbId -> AnyPublisher<[SearchDataItem], Error> in
+                guard let self = self else { return Fail(error: URLError(.cancelled)).eraseToAnyPublisher() }
+                return self.eztbProvider.fetchTorrents(imdbId: imdbId, page: self.currentPage + 1)
             }
             .switchToLatest()
             .receive(on: DispatchQueue.main)
-            .handleEvents(receiveOutput: { items in
-                self.isLoading = false
-                self.currentPage += 1
-                self.hasMorePages = !items.isEmpty
+            .handleEvents(receiveOutput: { [weak self] items in
+                self?.isLoading = false
+                self?.currentPage += 1
+                self?.hasMorePages = !items.isEmpty
             })
-            .map { items in
-                return self.items + items
+            .map { [weak self] items in
+                return (self?.items ?? []) + items
             }
-            .catch({ _ in Just(self.items) })
-            .assign(to: \.items, on: self)
+            .catch({ [weak self] _ in Just(self?.items ?? []) })
+            .sink(receiveValue: { [weak self] items in
+                self?.items = items
+            })
             .store(in: &cancellables)
     }
     

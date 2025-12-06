@@ -57,19 +57,22 @@ final class EZTVDataProvider: EZTVDataProviderProtocol {
     static let endpoint = "https://eztv.re/api/"
 
     private let urlSession: URLSession = URLSession.shared
-    private let endpointURL = URL(string: endpoint)!
+    private let endpointURL = URL(string: endpoint)
     
     func fetchTorrents(imdbId: String, page: Int) -> AnyPublisher<[SearchDataItem], Error> {
         fetchTorrents(imdbId: imdbId, limit: 20, page: page)
     }
     
     private func fetchTorrents(imdbId: String, limit: Int, page: Int) -> AnyPublisher<[SearchDataItem], Error> {
-        let requestURL = URL(string: endpointURL.absoluteString +
-                             "get-torrents?" +
-                             "limit=\(limit)&" +
-                             "page=\(page)&" +
-                             "imdb_id=\(imdbId)"
-        )!
+        guard let endpointURL = endpointURL,
+              let requestURL = URL(string: endpointURL.absoluteString +
+                                   "get-torrents?" +
+                                   "limit=\(limit)&" +
+                                   "page=\(page)&" +
+                                   "imdb_id=\(imdbId)") else {
+            return Fail(error: URLError(.badURL)).eraseToAnyPublisher()
+        }
+
         return urlSession
             .dataTaskPublisher(for: requestURL)
             .tryMap({ data, response -> Data in

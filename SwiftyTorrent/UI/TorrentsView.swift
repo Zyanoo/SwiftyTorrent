@@ -53,7 +53,11 @@ struct TorrentsView: View {
             .navigationBarTitle("Torrents")
         }
         .alert(isPresented: model.isPresentingAlert) { () -> Alert in
-            Alert(error: model.activeError!)
+            if let error = model.activeError {
+                return Alert(error: error)
+            } else {
+                return Alert(title: Text("Unknown Error"))
+            }
         }
     }
 
