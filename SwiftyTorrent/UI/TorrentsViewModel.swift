@@ -43,6 +43,12 @@ final class TorrentsViewModel: NSObject, ObservableObject, TorrentManagerDelegat
     }
     
     func reloadData() {
+        if !Thread.isMainThread {
+            DispatchQueue.main.async {
+                self.reloadData()
+            }
+            return
+        }
         torrentsWillChangeSubject.send()
         torrents = torrentManager.torrents()
             .sorted(by: { $0.name < $1.name })
