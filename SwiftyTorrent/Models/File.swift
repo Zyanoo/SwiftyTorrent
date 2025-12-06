@@ -113,12 +113,13 @@ public class Directory: FileProtocol, CustomStringConvertible {
                     let file = File(name: component, path: path, size: fileEntry.size)
                     lastDir.files.append(file)
                 } else {
-                    var dir: Directory! = lastDir.files.first(where: { $0.name == component }) as? Directory
+                    var dir = lastDir.files.first(where: { $0.name == component }) as? Directory
                     if dir == nil {
-                        dir = Directory(name: component, path: path)
-                        lastDir.files.append(dir)
+                        let newDir = Directory(name: component, path: path)
+                        lastDir.files.append(newDir)
+                        dir = newDir
                     }
-                    lastDir = dir
+                    lastDir = dir!
                 }
             }
         }
