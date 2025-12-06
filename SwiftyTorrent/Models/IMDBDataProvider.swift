@@ -20,7 +20,7 @@ protocol IMDBDataProviderProtocol {
 final class IMDBDataProvider: IMDBDataProviderProtocol {
 
     private let urlSession: URLSession = URLSession.shared
-    private let endpointURL = URL(string: "https://sg.media-imdb.com/")!
+    private let endpointURL = URL(string: "https://sg.media-imdb.com/")
     
     private var cache = [String: String]()
     
@@ -33,6 +33,10 @@ final class IMDBDataProvider: IMDBDataProviderProtocol {
                 .eraseToAnyPublisher()
         }
         // Constructs path like: `suggests/s/simpsons.json`
+        guard let endpointURL = endpointURL else {
+            return Fail(error: URLError(.badURL)).eraseToAnyPublisher()
+        }
+
         let requestURL = endpointURL.appendingPathComponent("suggests/\(query.prefix(1))/\(query).json")
         return urlSession
             .dataTaskPublisher(for: requestURL)
@@ -45,13 +49,18 @@ final class IMDBDataProvider: IMDBDataProviderProtocol {
             }
             .tryMap { (data) -> Data in
                 // Strip json-p padding `imdb$search_query()`
-                var value = String(bytes: data, encoding: .utf8)!
+                guard var value = String(bytes: data, encoding: .utf8) else {
+                    throw URLError(.cannotDecodeContentData)
+                }
                 if let idx = value.firstIndex(of: "(") {
                     value.removeSubrange(value.startIndex..<idx)
                     value = String(value.dropFirst())
                     value = String(value.dropLast())
                 }
-                return value.data(using: .utf8)!
+                guard let data = value.data(using: .utf8) else {
+                    throw URLError(.cannotDecodeContentData)
+                }
+                return data
             }
             .decode(type: Response.self, decoder: JSONDecoder())
             .tryMap { imdbResponse -> String in

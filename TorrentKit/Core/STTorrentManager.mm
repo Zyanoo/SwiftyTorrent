@@ -107,8 +107,10 @@ static NSErrorDomain STErrorDomain = @"org.kostyshyn.SwiftyTorrent.STTorrentMana
 #pragma mark -
 
 - (void)notifyDelegatesAboutError:(NSError *)error {
-    for (id<STTorrentManagerDelegate>delegate in self.delegates) {
-        [delegate torrentManager:self didErrorOccur:error];
+    @synchronized (self) {
+        for (id<STTorrentManagerDelegate>delegate in self.delegates) {
+            [delegate torrentManager:self didErrorOccur:error];
+        }
     }
 }
 
@@ -183,22 +185,28 @@ static NSErrorDomain STErrorDomain = @"org.kostyshyn.SwiftyTorrent.STTorrentMana
 
 - (void)notifyDelegatesWithAdd:(lt::torrent_handle)th {
     STTorrent *torrent = [self torrentFromHandle:th];
-    for (id<STTorrentManagerDelegate>delegate in self.delegates) {
-        [delegate torrentManager:self didAddTorrent:torrent];
+    @synchronized (self) {
+        for (id<STTorrentManagerDelegate>delegate in self.delegates) {
+            [delegate torrentManager:self didAddTorrent:torrent];
+        }
     }
 }
 
 - (void)notifyDelegatesWithRemove:(lt::torrent_handle)th {
     NSData *hashData = [self hashDataFromInfoHash:th.info_hash()];
-    for (id<STTorrentManagerDelegate>delegate in self.delegates) {
-        [delegate torrentManager:self didRemoveTorrentWithHash:hashData];
+    @synchronized (self) {
+        for (id<STTorrentManagerDelegate>delegate in self.delegates) {
+            [delegate torrentManager:self didRemoveTorrentWithHash:hashData];
+        }
     }
 }
 
 - (void)notifyDelegatesWithUpdate:(lt::torrent_handle)th {
     STTorrent *torrent = [self torrentFromHandle:th];
-    for (id<STTorrentManagerDelegate>delegate in self.delegates) {
-        [delegate torrentManager:self didReceiveUpdateForTorrent:torrent];
+    @synchronized (self) {
+        for (id<STTorrentManagerDelegate>delegate in self.delegates) {
+            [delegate torrentManager:self didReceiveUpdateForTorrent:torrent];
+        }
     }
 }
 
@@ -377,11 +385,15 @@ static NSErrorDomain STErrorDomain = @"org.kostyshyn.SwiftyTorrent.STTorrentMana
 #pragma mark -
 
 - (void)addDelegate:(id<STTorrentManagerDelegate>)delegate {
-    [self.delegates addObject:delegate];
+    @synchronized (self) {
+        [self.delegates addObject:delegate];
+    }
 }
     
 - (void)removeDelegate:(id<STTorrentManagerDelegate>)delegate {
-    [self.delegates removeObject:delegate];
+    @synchronized (self) {
+        [self.delegates removeObject:delegate];
+    }
 }
 
 #pragma mark - Public Methods
