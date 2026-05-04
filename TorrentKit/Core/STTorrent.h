@@ -32,3 +32,4 @@ NS_SWIFT_NAME(Torrent)
 
 @end
 NS_ASSUME_NONNULL_END
+

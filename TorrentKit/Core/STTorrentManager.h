@@ -8,8 +8,8 @@
 
 #import <Foundation/Foundation.h>
 
-#import "STDownloadable.h"
-#import "STTorrentManagerProtocol.h"
+#import <TorrentKit/STDownloadable.h>
+#import <TorrentKit/STTorrentManagerProtocol.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -69,3 +69,4 @@ NS_SWIFT_NAME(add(_:));
 @end
 
 NS_ASSUME_NONNULL_END
+

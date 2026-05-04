@@ -8,7 +8,7 @@
 
 #import <Foundation/Foundation.h>
 
-#import "STDownloadable.h"
+#import <STDownloadable.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -27,3 +27,4 @@ NS_SWIFT_NAME(TorrentFile)
 @end
 
 NS_ASSUME_NONNULL_END
+
