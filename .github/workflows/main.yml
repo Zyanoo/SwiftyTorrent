@@ -1,4 +1,4 @@
-name: Xcode - Build and Upload
+name: Build IPA
 
 on:
   push:
@@ -7,63 +7,40 @@ on:
 
 jobs:
   build:
-    name: Build using xcodebuild
-    runs-on: macos-latest
+    runs-on: macos-15
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
-
-      - name: Cache dependencies (Carthage)
-        uses: actions/cache@v3
-        id: cache-dependecies-carthage
-        with:
-          path: ./Carthage
-          key: ${{ runner.OS }}-cache-carthage-${{ hashFiles('./Cartfile.resolved') }}
-          restore-keys: |
-            ${{ runner.OS }}-cache-carthage-
-
-      - name: Bootstrap (Carthage)
-        if: steps.cache-dependecies-carthage.outputs.cache-hit != 'true'
-        run: ./carthage.sh bootstrap --platform ios,tvos --use-xcframeworks
-        shell: bash
+        uses: actions/checkout@v4
 
       - name: Cache dependencies
-        uses: actions/cache@v3
-        id: cache-dependecies
+        uses: actions/cache@v4
+        id: cache-dependencies
         with:
           path: ./Thirdparties
-          key: ${{ runner.OS }}-cache-${{ hashFiles('./bootstrap.sh') }}
+          key: ${{ runner.os }}-cache-${{ hashFiles('./bootstrap.sh') }}
           restore-keys: |
-            ${{ runner.OS }}-cache-
+            ${{ runner.os }}-cache-
 
       - name: Bootstrap
-        if: steps.cache-dependecies.outputs.cache-hit != 'true'
+        if: steps.cache-dependencies.outputs.cache-hit != 'true'
         run: ./bootstrap.sh
         shell: bash
 
       - name: Bump version
         env:
           build_number: ${{ github.run_number }}
-        run: |
-          xcrun agvtool new-version -all $((14+$build_number)) # temp fix
+        run: xcrun agvtool new-version -all $((47 + build_number))
 
-      - name: Build, acrhive and upload (SwiftyTorrent)
+      - name: Build IPA
         uses: ./.github/actions/build-archive-upload
         with:
-          scheme: SwiftyTorrent
-          build_settings: 'ENABLE_BITCODE=NO'
-          platform: ios
-          auth_key_issuer_id: ${{ secrets.APPSTORE_ISSUER_ID }}
-          auth_key_id: ${{ secrets.APPSTORE_API_KEY_ID }}
-          auth_key_path: ${{ steps.appstore-private-key.outputs.AUTH_KEY_PATH }}
+          scheme: SwiftyYTDL
+          build_settings: 'CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO ENABLE_BITCODE=NO'
+          platform: iOS
 
-      - name: Build, acrhive and upload (SwiftyTV)
-        uses: ./.github/actions/build-archive-upload
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
         with:
-          scheme: SwiftyTV
-          build_settings: 'ENABLE_BITCODE=NO'
-          platform: tvos
-          auth_key_issuer_id: ${{ secrets.APPSTORE_ISSUER_ID }}
-          auth_key_id: ${{ secrets.APPSTORE_API_KEY_ID }}
-          auth_key_path: ${{ steps.appstore-private-key.outputs.AUTH_KEY_PATH }}
+          name: SwiftyYTDL-IPA
+          path: build/SwiftyYTDL/*.ipa
