@@ -14,42 +14,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Install the Apple certificate
-        env:
-          BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
-          P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
-          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
-        run: |
-          # create variables
-          CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
-          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
-
-          # import certificate from secrets
-          echo -n "$BUILD_CERTIFICATE_BASE64" | base64 --decode --output $CERTIFICATE_PATH
-
-          # create temporary keychain
-          security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-
-          # import certificate to keychain
-          security import $CERTIFICATE_PATH -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
-          security list-keychain -d user -s $KEYCHAIN_PATH
-
-      - name: Install App Store Connect private key
-        id: appstore-private-key
-        env:
-          API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
-          API_PRIVATE_KEY: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
-        run: |
-          PRIV_KEY_DIR="$HOME/private_keys"
-          AUTH_KEY_FILE="$PRIV_KEY_DIR/AuthKey_$API_KEY_ID.p8"
-
-          echo "::set-output name=AUTH_KEY_PATH::$AUTH_KEY_FILE"
-
-          mkdir -p "$PRIV_KEY_DIR"
-          echo "$API_PRIVATE_KEY" > "$AUTH_KEY_FILE"
-
       - name: Cache dependencies (Carthage)
         uses: actions/cache@v3
         id: cache-dependecies-carthage
