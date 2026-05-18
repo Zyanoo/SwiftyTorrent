@@ -1,80 +1,107 @@
-name: Build and export IPA
+name: Build SwiftyTorrent IPA
 
-inputs:
-  scheme:
-    required: true
-    type: string
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
 
-  build_settings:
-    required: true
-    type: string
+jobs:
+  build:
+    runs-on: macos-14
 
-  platform:
-    required: true
-    type: string
+    steps:
+      #
+      # Checkout
+      #
+      - name: Checkout
+        uses: actions/checkout@v4
 
-runs:
-  using: "composite"
+      #
+      # Install tools
+      #
+      - name: Install dependencies
+        run: |
+          brew install carthage
 
-  steps:
-    - name: Build Archive
-      env:
-        scheme: ${{ inputs.scheme }}
-        platform: ${{ inputs.platform }}
-        build_settings: ${{ inputs.build_settings }}
-      shell: bash
-      run: |
-        set -eo pipefail
+      #
+      # Fix dead boost URL
+      #
+      - name: Patch bootstrap.sh
+        run: |
+          perl -pi -e 's#https://boostorg\.jfrog\.io[^\s"]+#https://archives.boost.io/release/1.86.0/source/boost_1_86_0.tar.gz#g' bootstrap.sh
 
-        archive_file="build/$scheme.xcarchive"
+          echo "===== BOOST URL CHECK ====="
+          grep -i boost bootstrap.sh
 
-        xcodebuild clean archive \
-          -scheme "$scheme" \
-          -archivePath "$archive_file" \
-          -destination "generic/platform=$platform" \
-          $build_settings
+      #
+      # Cache Carthage
+      #
+      - name: Cache Carthage
+        uses: actions/cache@v4
+        with:
+          path: Carthage
+          key: ${{ runner.os }}-carthage-${{ hashFiles('Cartfile.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-carthage-
 
-    - name: Create ExportOptions.plist
-      id: export-options
-      shell: bash
-      run: |
-        export_plist="$RUNNER_TEMP/ExportOptions.plist"
+      #
+      # Bootstrap Carthage
+      #
+      - name: Bootstrap Carthage
+        run: |
+          chmod +x carthage.sh
+          ./carthage.sh bootstrap --platform ios --use-xcframeworks
 
-        echo "EXPORT_PLIST=$export_plist" >> $GITHUB_OUTPUT
+      #
+      # Bootstrap third-party dependencies
+      #
+      - name: Bootstrap dependencies
+        run: |
+          chmod +x bootstrap.sh
+          ./bootstrap.sh
 
-        cat > "$export_plist" <<EOF
-        <?xml version="1.0" encoding="UTF-8"?>
-        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-        <plist version="1.0">
-        <dict>
-            <key>method</key>
-            <string>development</string>
-            <key>signingStyle</key>
-            <string>manual</string>
-            <key>compileBitcode</key>
-            <false/>
-        </dict>
-        </plist>
-        EOF
+      #
+      # Show available schemes
+      #
+      - name: List schemes
+        run: |
+          xcodebuild -list -project SwiftyTorrent.xcodeproj
 
-    - name: Export IPA
-      env:
-        scheme: ${{ inputs.scheme }}
-        export_plist: ${{ steps.export-options.outputs.EXPORT_PLIST }}
-      shell: bash
-      run: |
-        set -eo pipefail
+      #
+      # Build app
+      #
+      - name: Build SwiftyTorrent
+        run: |
+          xcodebuild \
+            -project SwiftyTorrent.xcodeproj \
+            -scheme SwiftyTorrent \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            OTHER_CPLUSPLUSFLAGS="-std=c++14"
 
-        archive_file="build/$scheme.xcarchive"
-        export_dir="build/$scheme"
+      #
+      # Create IPA
+      #
+      - name: Create IPA
+        run: |
+          mkdir Payload
 
-        mkdir -p "$export_dir"
+          APP_PATH=$(find build -name "*.app" | head -n 1)
 
-        xcodebuild \
-          -exportArchive \
-          -archivePath "$archive_file" \
-          -exportPath "$export_dir" \
-          -exportOptionsPlist "$export_plist"
+          echo "APP_PATH=$APP_PATH"
 
-        echo "IPA exported to: $export_dir"
-        ls -lah "$export_dir"
+          cp -R "$APP_PATH" Payload/
+
+          zip -r SwiftyTorrent.ipa Payload
+
+      #
+      # Upload IPA
+      #
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: SwiftyTorrent-IPA
+          path: SwiftyTorrent.ipa
