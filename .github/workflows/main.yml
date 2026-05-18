@@ -1,46 +1,107 @@
-name: Build IPA
+name: Build SwiftyTorrent IPA
 
 on:
-  push:
-    branches: [ "master" ]
   workflow_dispatch:
+  push:
+    branches:
+      - master
 
 jobs:
   build:
-    runs-on: macos-15
+    runs-on: macos-14
 
     steps:
+      #
+      # Checkout
+      #
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Cache dependencies
+      #
+      # Install tools
+      #
+      - name: Install dependencies
+        run: |
+          brew install carthage
+
+      #
+      # Fix dead boost URL
+      #
+      - name: Patch bootstrap.sh
+        run: |
+          perl -pi -e 's#https://boostorg\.jfrog\.io[^\s"]+#https://archives.boost.io/release/1.86.0/source/boost_1_86_0.tar.gz#g' bootstrap.sh
+
+          echo "===== BOOST URL CHECK ====="
+          grep -i boost bootstrap.sh
+
+      #
+      # Cache Carthage
+      #
+      - name: Cache Carthage
         uses: actions/cache@v4
-        id: cache-dependencies
         with:
-          path: ./Thirdparties
-          key: ${{ runner.os }}-cache-${{ hashFiles('./bootstrap.sh') }}
+          path: Carthage
+          key: ${{ runner.os }}-carthage-${{ hashFiles('Cartfile.resolved') }}
           restore-keys: |
-            ${{ runner.os }}-cache-
+            ${{ runner.os }}-carthage-
 
-      - name: Bootstrap
-        if: steps.cache-dependencies.outputs.cache-hit != 'true'
-        run: ./bootstrap.sh
-        shell: bash
+      #
+      # Bootstrap Carthage
+      #
+      - name: Bootstrap Carthage
+        run: |
+          chmod +x carthage.sh
+          ./carthage.sh bootstrap --platform ios --use-xcframeworks
 
-      - name: Bump version
-        env:
-          build_number: ${{ github.run_number }}
-        run: xcrun agvtool new-version -all $((47 + build_number))
+      #
+      # Bootstrap third-party dependencies
+      #
+      - name: Bootstrap dependencies
+        run: |
+          chmod +x bootstrap.sh
+          ./bootstrap.sh
 
-      - name: Build IPA
-        uses: ./.github/actions/build-archive-upload
-        with:
-          scheme: SwiftyYTDL
-          build_settings: 'CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO ENABLE_BITCODE=NO'
-          platform: iOS
+      #
+      # Show available schemes
+      #
+      - name: List schemes
+        run: |
+          xcodebuild -list -project SwiftyTorrent.xcodeproj
 
-      - name: Upload IPA Artifact
+      #
+      # Build app
+      #
+      - name: Build SwiftyTorrent
+        run: |
+          xcodebuild \
+            -project SwiftyTorrent.xcodeproj \
+            -scheme SwiftyTorrent \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            OTHER_CPLUSPLUSFLAGS="-std=c++14"
+
+      #
+      # Create IPA
+      #
+      - name: Create IPA
+        run: |
+          mkdir Payload
+
+          APP_PATH=$(find build -name "*.app" | head -n 1)
+
+          echo "APP_PATH=$APP_PATH"
+
+          cp -R "$APP_PATH" Payload/
+
+          zip -r SwiftyTorrent.ipa Payload
+
+      #
+      # Upload IPA
+      #
+      - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: SwiftyYTDL-IPA
-          path: build/SwiftyYTDL/*.ipa
+          name: SwiftyTorrent-IPA
+          path: SwiftyTorrent.ipa
