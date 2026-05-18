@@ -1,106 +1,80 @@
-name: Build, archive and upload to TestFlight
+name: Build and export IPA
+
 inputs:
   scheme:
     required: true
     type: string
+
   build_settings:
     required: true
     type: string
+
   platform:
-    required: true
-    type: string
-  auth_key_issuer_id:
-    required: true
-    type: string
-  auth_key_id:
-    required: true
-    type: string
-  auth_key_path:
     required: true
     type: string
 
 runs:
   using: "composite"
+
   steps:
-    - name: Build
-      id: build
+    - name: Build Archive
       env:
         scheme: ${{ inputs.scheme }}
         platform: ${{ inputs.platform }}
-        auth_key_issuer_id: ${{ inputs.auth_key_issuer_id }}
-        auth_key_id: ${{ inputs.auth_key_id }}
-        auth_key_path: ${{ inputs.auth_key_path }}
         build_settings: ${{ inputs.build_settings }}
       shell: bash
       run: |
-        archive_file=build/$scheme.xcarchive
+        set -eo pipefail
 
-        xcodebuild clean build archive \
+        archive_file="build/$scheme.xcarchive"
+
+        xcodebuild clean archive \
           -scheme "$scheme" \
           -archivePath "$archive_file" \
           -destination "generic/platform=$platform" \
-          -allowProvisioningUpdates \
-          -authenticationKeyPath "$auth_key_path" \
-          -authenticationKeyID $auth_key_id \
-          -authenticationKeyIssuerID $auth_key_issuer_id \
-          "$build_settings" #| xcpretty && exit ${PIPESTATUS[0]}
+          $build_settings
 
-    - name: Create export options plist
-      id: export-options-plist
-      env:
-        scheme: ${{ inputs.scheme }}
+    - name: Create ExportOptions.plist
+      id: export-options
       shell: bash
       run: |
-        export_plist=$RUNNER_TEMP/export.plist
-        echo "::set-output name=EXPORT_OPTIONS_PLIST::$export_plist"
+        export_plist="$RUNNER_TEMP/ExportOptions.plist"
 
-        cat > $export_plist << EOL
+        echo "EXPORT_PLIST=$export_plist" >> $GITHUB_OUTPUT
+
+        cat > "$export_plist" <<EOF
         <?xml version="1.0" encoding="UTF-8"?>
         <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
         <plist version="1.0">
-          <dict>
+        <dict>
             <key>method</key>
-            <string>app-store</string>
-          </dict>
+            <string>development</string>
+            <key>signingStyle</key>
+            <string>manual</string>
+            <key>compileBitcode</key>
+            <false/>
+        </dict>
         </plist>
-        EOL
+        EOF
 
-    - name: Archive
-      id: archive
+    - name: Export IPA
       env:
         scheme: ${{ inputs.scheme }}
-        auth_key_issuer_id: ${{ inputs.auth_key_issuer_id }}
-        auth_key_id: ${{ inputs.auth_key_id }}
-        auth_key_path: ${{ inputs.auth_key_path }}
-        export_plist: ${{ steps.export-options-plist.outputs.EXPORT_OPTIONS_PLIST }}
+        export_plist: ${{ steps.export-options.outputs.EXPORT_PLIST }}
       shell: bash
       run: |
-        archive_file=build/$scheme.xcarchive
-        export_dir=build/$scheme
-        echo "::set-output name=IPA_FILE::$export_dir/$scheme.ipa"
+        set -eo pipefail
+
+        archive_file="build/$scheme.xcarchive"
+        export_dir="build/$scheme"
+
+        mkdir -p "$export_dir"
 
         xcodebuild \
           -exportArchive \
           -archivePath "$archive_file" \
           -exportPath "$export_dir" \
-          -exportOptionsPlist "$export_plist" \
-          -allowProvisioningUpdates \
-          -authenticationKeyPath "$auth_key_path" \
-          -authenticationKeyID $auth_key_id \
-          -authenticationKeyIssuerID $auth_key_issuer_id #| xcpretty && exit ${PIPESTATUS[0]} 
+          -exportOptionsPlist "$export_plist"
 
-    - name: Upload app to TestFlight
-      id: upload
-      env:
-        ipa_file: ${{ steps.archive.outputs.IPA_FILE }}
-        platform: ${{ inputs.platform }}
-        auth_key_issuer_id: ${{ inputs.auth_key_issuer_id }}
-        auth_key_id: ${{ inputs.auth_key_id }}
-      shell: bash
-      run: |
-        xcrun altool \
-          --upload-app \
-          --file $ipa_file \
-          --type $platform \
-          --apiKey $auth_key_id \
-          --apiIssuer $auth_key_issuer_id
+        echo "IPA exported to: $export_dir"
+        ls -lah "$export_dir"
