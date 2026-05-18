@@ -51,7 +51,7 @@ jobs:
           echo "$API_PRIVATE_KEY" > "$AUTH_KEY_FILE"
 
       - name: Cache dependencies (Carthage)
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         id: cache-dependecies-carthage
         with:
           path: ./Carthage
@@ -65,7 +65,7 @@ jobs:
         shell: bash
 
       - name: Cache dependencies
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         id: cache-dependecies
         with:
           path: ./Thirdparties
